@@ -1,0 +1,33 @@
+[package]
+name    = "external-dns-pdns-webhook"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "webhook"
+path = "src/main.rs"
+
+[dependencies]
+# Web framework
+axum          = { version = "0.7", features = ["json"] }
+tokio         = { version = "1",   features = ["full"] }
+tower         = "0.4"
+tower-http    = { version = "0.5", features = ["trace"] }
+
+# HTTP client (talking to PowerDNS API)
+reqwest       = { version = "0.12", features = ["json"] }
+
+# Serialisation
+serde         = { version = "1", features = ["derive"] }
+serde_json    = "1"
+
+# Logging / tracing
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Config from env
+envy  = "0.4"
+
+# Misc
+thiserror = "1"
+anyhow    = "1"

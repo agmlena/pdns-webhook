@@ -1,0 +1,52 @@
+# external-dns Helm values – Rust PowerDNS HTTPS webhook sidecar
+# helm upgrade --install external-dns external-dns/external-dns -f values.yaml
+
+provider:
+  name: webhook
+
+extraArgs:
+  - --webhook-provider-url=http://localhost:8888
+  - --managed-record-types=HTTPS
+  - --managed-record-types=A
+  - --managed-record-types=AAAA
+  - --managed-record-types=CNAME
+  - --managed-record-types=TXT
+  - --txt-owner-id=external-dns
+  - --source=ingress
+  - --source=service
+
+sidecars:
+  - name: pdns-webhook
+    image: ghcr.io/your-org/external-dns-pdns-webhook-rs:latest  # ← replace
+    imagePullPolicy: IfNotPresent
+    ports:
+      - name: webhook
+        containerPort: 8888
+    env:
+      - name: PDNS_API_URL
+        value: "http://powerdns.powerdns.svc.cluster.local:8081"
+      - name: PDNS_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: powerdns-api-key
+            key: api-key
+      - name: PDNS_SERVER_ID
+        value: "localhost"
+      - name: DOMAIN_FILTER
+        value: "example.com,example.net"
+      - name: DEFAULT_TTL
+        value: "300"
+      - name: RUST_LOG
+        value: "external_dns_pdns_webhook=info,tower_http=warn"
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 8888
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /healthz
+        port: 8888
+      initialDelaySeconds: 5
+      periodSeconds: 10
