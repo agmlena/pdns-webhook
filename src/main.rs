@@ -31,12 +31,31 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialise tracing – respects RUST_LOG env var
+    // Build the env filter from RUST_LOG, warn loudly if it's invalid or absent
+    // so the developer knows exactly why they aren't seeing logs.
+    // Default: debug for our code, warn for noisy dependencies.
+    let filter = match EnvFilter::try_from_default_env() {
+        Ok(f) => {
+            eprintln!("[tracing] using RUST_LOG={}", std::env::var("RUST_LOG").unwrap_or_default());
+            f
+        }
+        Err(e) => {
+            let default = "external_dns_pdns_webhook=debug,tower_http=debug";
+            eprintln!("[tracing] RUST_LOG not set or invalid ({e}), defaulting to: {default}");
+            EnvFilter::new(default)
+        }
+    };
+
     tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            EnvFilter::new("external_dns_pdns_webhook=info,tower_http=debug")
-        }))
-        .with(tracing_subscriber::fmt::layer())
+        .with(filter)
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_target(true)       // shows module path: external_dns_pdns_webhook::pdns
+                .with_file(true)         // shows source file: src/pdns.rs
+                .with_line_number(true)  // shows line number: :85
+                .with_thread_ids(false)
+                .with_ansi(true),        // coloured output in terminals
+        )
         .init();
 
     let cfg = Config::from_env()?;
@@ -54,7 +73,6 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState { cfg, pdns };
 
     let app = Router::new()
-        // external-dns webhook contract
         .route("/",                get(handlers::negotiate))
         .route("/healthz",         get(handlers::healthz))
         .route("/records",         get(handlers::get_records))

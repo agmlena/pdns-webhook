@@ -256,15 +256,46 @@ fn ensure_fqdn(name: &str) -> String {
     }
 }
 
-/// Format an HTTPS target into PowerDNS wire-text format.
-/// If the target already contains a space (SvcPriority is present) leave it
-/// alone; otherwise wrap with `1 <target>.`
-fn normalise_https_target(target: &str) -> String {
-    if target.contains(' ') {
-        target.to_string()
-    } else {
-        format!("1 {}.", target.trim_end_matches('.'))
+/// Normalise a record's content value for PowerDNS wire format.
+///
+/// PowerDNS requires a trailing dot on every value that is a DNS name:
+///   CNAME  lb.domain.com   → lb.domain.com.
+///   MX     10 mail.domain  → 10 mail.domain.
+///   NS     ns1.domain.com  → ns1.domain.com.
+///
+/// A/AAAA records contain IP addresses – no dot needed.
+/// TXT records contain quoted strings – no dot needed.
+fn normalise_target(record_type: &str, target: &str) -> String {
+    match record_type {
+        "A" | "AAAA" => target.to_string(),
+        "TXT"        => target.to_string(),
+        "HTTPS"      => normalise_https_target(target),
+        // CNAME, MX, NS, PTR, SRV, ALIAS – all name-valued types need a trailing dot
+        _            => ensure_fqdn(target),
     }
+}
+
+/// Format an HTTPS SvcParam string for PowerDNS.
+/// Ensures a numeric SvcPriority is present and TargetName ends with a dot.
+///
+/// Handles:
+///   "1 . alpn=h2,h3"          → "1 . alpn=h2,h3"     (already correct)
+///   "1 lb.domain.com alpn=h2" → "1 lb.domain.com. alpn=h2"
+///   "lb.domain.com"           → "1 lb.domain.com."    (bare hostname)
+fn normalise_https_target(target: &str) -> String {
+    let t = target.trim();
+    let parts: Vec<&str> = t.splitn(3, ' ').collect();
+
+    if parts.len() >= 2 && parts[0].parse::<u16>().is_ok() {
+        // Already has a priority – ensure TargetName is fully qualified
+        let priority    = parts[0];
+        let target_name = ensure_fqdn(parts[1]);
+        let params      = parts.get(2).map(|p| format!(" {p}")).unwrap_or_default();
+        return format!("{priority} {target_name}{params}");
+    }
+
+    // No priority prefix – wrap the whole thing
+    format!("1 {}.", t.trim_end_matches('.'))
 }
 
 fn build_rrset(ep: &Endpoint, default_ttl: u32, changetype: &str) -> RrSet {
@@ -274,11 +305,13 @@ fn build_rrset(ep: &Endpoint, default_ttl: u32, changetype: &str) -> RrSet {
         .targets
         .iter()
         .map(|t| {
-            let content = if ep.record_type == "HTTPS" {
-                normalise_https_target(t)
-            } else {
-                t.clone()
-            };
+            let content = normalise_target(&ep.record_type, t);
+            tracing::debug!(
+                record_type = %ep.record_type,
+                original    = %t,
+                normalised  = %content,
+                "normalised record content"
+            );
             Record { content, disabled: false }
         })
         .collect();
