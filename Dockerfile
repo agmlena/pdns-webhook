@@ -29,7 +29,7 @@ RUN mkdir -p /var/run/secrets/pdns && chown webhook /var/run/secrets/pdns
 
 USER webhook
 
-COPY --from=builder /build/target/release/webhook /usr/local/bin/webhook
+COPY --from=builder /build/target/release/server /usr/local/bin/server
 
 # ── Non-sensitive defaults ─────────────────────────────────────────────────────
 # PDNS_API_KEY is intentionally absent – supply it via a mounted secret file.
@@ -68,4 +68,4 @@ EXPOSE 8888
 #     -p 8888:8888 \
 #     ghcr.io/your-org/external-dns-pdns-webhook-rs:latest
 
-ENTRYPOINT ["/usr/local/bin/webhook"]
+ENTRYPOINT ["/usr/local/bin/server"]
