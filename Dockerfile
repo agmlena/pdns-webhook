@@ -3,13 +3,6 @@ FROM rust:1.78-slim AS builder
 
 WORKDIR /build
 
-# Copy vendored dependencies and Cargo config (enables fully offline build).
-# Run `cargo vendor` locally first, then commit the vendor/ dir and
-# .cargo/config.toml to your repository.
-COPY .cargo .cargo
-COPY vendor vendor
-COPY Cargo.toml Cargo.lock ./
-
 # Cache dependency compilation – only reruns when Cargo.toml/Cargo.lock change
 RUN mkdir src && echo "fn main(){}" > src/main.rs
 RUN cargo build --release --offline 2>/dev/null; rm src/main.rs
