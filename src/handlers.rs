@@ -32,7 +32,7 @@ const WEBHOOK_CT: &str = "application/external.dns.webhook+json;version=1";
 //   "1 . alpn=h2"              – AliasMode, HTTP/2 only
 //   "1 svc.example.com."       – ServiceMode with explicit target
 //   "0 svc.example.com."       – ServiceMode, priority 0 (alias)
-const HTTPS_TARGET_ANNOTATION: &str = "pdns-https-target";
+const HTTPS_TARGET_ANNOTATION: &str = "webhook/pdns-https-target";
 
 fn webhook_headers() -> HeaderMap {
     let mut h = HeaderMap::new();
