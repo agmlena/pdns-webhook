@@ -9,7 +9,7 @@ RUN cargo build --release --offline 2>/dev/null; rm src/main.rs
 
 # Build the real binary
 COPY src ./src
-RUN touch src/main.rs && cargo build --release --offline
+RUN touch src/main.rs && cargo build --release
 
 # ── Runtime stage ──────────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
