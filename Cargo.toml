@@ -3,8 +3,13 @@ name    = "external-dns-pdns-webhook"
 version = "0.1.0"
 edition = "2021"
 
+# Expose modules for integration tests
+[lib]
+name = "pdns_webhook"
+path = "src/lib.rs"
+
 [[bin]]
-name = "webhook"
+name = "server"
 path = "src/main.rs"
 
 [dependencies]
@@ -32,3 +37,7 @@ envy  = "0.4"
 # Misc
 thiserror = "1"
 anyhow    = "1"
+
+[dev-dependencies]
+tokio    = { version = "1", features = ["full"] }
+tower    = { version = "0.4", features = ["util"] }

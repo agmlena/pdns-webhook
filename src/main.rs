@@ -1,7 +1,13 @@
-mod config;
-mod dns;
-mod handlers;
-mod pdns;
+//! Binary entry point.
+//! All modules live in lib.rs (crate `pdns_webhook`).
+//! This file only wires them together into a running server.
+
+use pdns_webhook::{
+    config::Config,
+    handlers,
+    pdns::PdnsClient,
+    AppState,
+};
 
 use std::net::SocketAddr;
 
@@ -18,29 +24,13 @@ use tower_http::trace::TraceLayer;
 use tracing::{debug, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-use crate::{config::Config, pdns::PdnsClient};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared application state
-// ─────────────────────────────────────────────────────────────────────────────
-
-#[derive(Clone)]
-pub struct AppState {
-    pub cfg: Config,
-    pub pdns: PdnsClient,
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Request body logging middleware
-//
-// Only active at DEBUG level or below. Reads the full body into memory,
-// logs it, then puts it back so the actual handler can still deserialise it.
 // ─────────────────────────────────────────────────────────────────────────────
 
 async fn log_request_body(req: Request, next: Next) -> Response {
     let (parts, body) = req.into_parts();
 
-    // Collect the body bytes
     let bytes = match body.collect().await {
         Ok(collected) => collected.to_bytes(),
         Err(e) => {
@@ -49,11 +39,9 @@ async fn log_request_body(req: Request, next: Next) -> Response {
         }
     };
 
-    // Log method, path and body at DEBUG level
     if tracing::enabled!(tracing::Level::DEBUG) {
         let body_str = std::str::from_utf8(&bytes)
             .map(|s| {
-                // Pretty-print if it's valid JSON, otherwise show raw
                 serde_json::from_str::<serde_json::Value>(s)
                     .map(|v| serde_json::to_string_pretty(&v).unwrap_or_else(|_| s.to_string()))
                     .unwrap_or_else(|_| s.to_string())
@@ -68,9 +56,7 @@ async fn log_request_body(req: Request, next: Next) -> Response {
         );
     }
 
-    // Reconstruct the request with the original bytes and pass it on
-    let req = Request::from_parts(parts, Body::from(bytes));
-    next.run(req).await
+    next.run(Request::from_parts(parts, Body::from(bytes))).await
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
             f
         }
         Err(e) => {
-            let default = "external_dns_pdns_webhook=debug,tower_http=debug";
+            let default = "pdns_webhook=debug,tower_http=debug";
             eprintln!("[tracing] RUST_LOG not set or invalid ({e}), defaulting to: {default}");
             EnvFilter::new(default)
         }
@@ -126,7 +112,6 @@ async fn main() -> anyhow::Result<()> {
         .route("/records",         get(handlers::get_records))
         .route("/records",         post(handlers::apply_changes))
         .route("/adjustendpoints", post(handlers::adjust_endpoints))
-        // log_request_body runs before handlers; only logs at DEBUG level
         .layer(middleware::from_fn(log_request_body))
         .layer(TraceLayer::new_for_http())
         .with_state(state);

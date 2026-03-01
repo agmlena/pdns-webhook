@@ -19,7 +19,7 @@ pub struct Endpoint {
     pub record_type: String,
     #[serde(default)]
     pub targets: Vec<String>,
-    #[serde(default)]
+    #[serde(default, rename(serialize="recordTTL",deserialize="recordTTL"))]
     pub record_ttl: u32,
     #[serde(default)]
     pub labels: std::collections::HashMap<String, String>,
